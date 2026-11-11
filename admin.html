@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Team Tracker Admin</title><link rel="stylesheet" href="style.css"><meta name="robots" content="noindex"></head>
+<body><div id="app"></div>
+<script src="config.js"></script><script src="common.js"></script>
+<script>
+let sha='',tok='',unl=false,loaded=false,dirty=false,busy=false,T;
+try{tok=localStorage.getItem('tt_token')||'';unl=sessionStorage.getItem('tt_u')==='1'}catch(e){}
+const uid=()=>Math.random().toString(36).slice(2,9);
+const api=()=>`https://api.github.com/repos/${CONFIG.repo}/contents/${CONFIG.dataFile}`;
+const hd=()=>({Authorization:'Bearer '+tok,Accept:'application/vnd.github+json'});
+function st(m,bad){const e=$('#st');if(e){e.textContent=m;e.className=bad?'bad':'mut'}}
+function render(){
+  let o=`<div class="bar"><h1>Team Tracker · Admin</h1><nav><a href="index.html">View page</a><a href="index.html#display">Screen</a></nav></div>`;
+  if(CONFIG.repo.includes('YOUR-'))o+='<div class="panel"><h3>Setup needed</h3><p>Open config.js in your repository and set repo to your username/repository-name.</p></div>';
+  else if(!unl)o+=`<div class="panel"><h3>Enter edit password</h3><div class="row"><input id="pw" type="password" placeholder="Password" autocomplete="off"><button class="pri" data-a="pw">Unlock</button></div><div id="pwe" class="bad"></div></div>`;
+  else if(!tok)o+=`<div class="panel"><h3>Connect to GitHub (one time per device)</h3><p>Paste a fine-grained personal access token with Contents: Read and write on this repository only. It is kept only in this browser.</p><div class="row"><input id="tk" type="password" placeholder="github_pat_..." autocomplete="off"><button class="pri" data-a="tk">Save token</button></div><div id="tke" class="bad"></div></div>`;
+  else if(!loaded)o+='<p class="sum">Loading…</p><div id="st" class="mut"></div>';
+  else{
+    o+=summary()+`<div class="panel"><h3>Add team leader</h3><div class="row"><input id="nl" placeholder="Team leader name"><button class="pri" data-a="al">Add leader</button></div></div>
+    <div class="panel"><h3>Add staff (one per line or comma separated)</h3><div class="row"><textarea id="ns" rows="2" placeholder="Names"></textarea></div><div class="row"><select id="nsl">${opts('')}</select><button class="pri" data-a="as">Add staff</button></div></div>`
+    +gridHtml(true)+`<p id="st" class="mut" style="margin-top:14px"></p><div class="row"><button class="sec" data-a="lock">Lock</button><button class="sec" data-a="rmtok">Remove token from this device</button></div>`;
+  }
+  $('#app').innerHTML=o;
+}
+async function load(){
+  try{
+    const r=await fetch(api()+'?ref='+CONFIG.branch+'&t='+Date.now(),{headers:hd(),cache:'no-store'});
+    if(r.status===401||r.status===403){tok='';try{localStorage.removeItem('tt_token')}catch(e){}render();$('#tke')&&($('#tke').textContent='GitHub rejected the token. Check it and try again.');return}
+    if(r.status===404){sha='';S={leaders:[],staff:[]}}
+    else if(!r.ok)throw new Error(r.status);
+    else{const j=await r.json();sha=j.sha;S=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\s/g,'')),c=>c.charCodeAt(0))))}
+    loaded=true;render();
+  }catch(e){render();st('Could not load data ('+e.message+')',1)}
+}
+function commit(){render();st('Saving…');clearTimeout(T);T=setTimeout(save,500)}
+async function save(){
+  if(busy){dirty=true;return}
+  busy=true;dirty=false;st('Saving…');
+  try{
+    const bytes=new TextEncoder().encode(JSON.stringify(S,null,1));let bin='';bytes.forEach(b=>bin+=String.fromCharCode(b));
+    const body={message:'Update team tracker',content:btoa(bin),branch:CONFIG.branch};if(sha)body.sha=sha;
+    const r=await fetch(api(),{method:'PUT',headers:{...hd(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){if(r.status===409||r.status===422){busy=false;await load();st('Data changed elsewhere, reloaded. Please redo your change.',1);return}throw new Error(r.status)}
+    sha=(await r.json()).content.sha;st('Saved ✓ The screen updates within a minute or two.');
+  }catch(e){st('Could not save ('+e.message+'). Check the token and repo settings.',1)}
+  busy=false;if(dirty)save();
+}
+async function unlock(){
+  let h='';try{h=await sha256($('#pw').value)}catch(e){}
+  if(h&&h===CONFIG.passwordHash){unl=true;try{sessionStorage.setItem('tt_u','1')}catch(e){}start()}
+  else $('#pwe').textContent='Incorrect password';
+}
+function start(){render();if(unl&&tok&&!loaded)load()}
+$('#app').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b||b.tagName==='SELECT')return;
+  const a=b.dataset.a,id=b.dataset.id;
+  if(a==='pw'){unlock();return}
+  if(!unl)return;
+  if(a==='tk'){const v=$('#tk').value.trim();if(!v)return;tok=v;try{localStorage.setItem('tt_token',v)}catch(e){}start();return}
+  if(a==='lock'){unl=false;try{sessionStorage.removeItem('tt_u')}catch(e){}render();return}
+  if(a==='rmtok'){tok='';loaded=false;try{localStorage.removeItem('tt_token')}catch(e){}render();return}
+  if(!loaded)return;
+  if(a==='tog'){const s=S.staff.find(x=>x.id===id);s.on=!s.on}
+  else if(a==='rm')S.staff=S.staff.filter(x=>x.id!==id);
+  else if(a==='dl'){S.leaders=S.leaders.filter(x=>x.id!==id);S.staff.forEach(s=>{if(s.leader===id)s.leader=''})}
+  else if(a==='al'){const v=$('#nl').value.trim();if(!v)return;S.leaders.push({id:uid(),name:v})}
+  else if(a==='as'){const v=$('#ns').value.split(/[\n,]+/).map(x=>x.trim()).filter(Boolean);if(!v.length)return;const l=$('#nsl').value;v.forEach(n=>S.staff.push({id:uid(),name:n,leader:l,on:true}))}
+  else return;
+  commit();
+});
+$('#app').addEventListener('change',e=>{const t=e.target;if(unl&&loaded&&t.dataset.a==='mv'){S.staff.find(x=>x.id===t.dataset.id).leader=t.value;commit()}});
+$('#app').addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  if(e.target.id==='pw'){e.preventDefault();unlock()}
+  if(e.target.id==='tk'){e.preventDefault();$('[data-a="tk"]').click()}
+  if(e.target.id==='nl'){e.preventDefault();$('[data-a="al"]').click()}
+});
+start();
+</script></body></html>

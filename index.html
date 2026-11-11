@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Team Tracker</title><link rel="stylesheet" href="style.css"></head>
+<body><div id="app"></div>
+<script src="config.js"></script><script src="common.js"></script>
+<script>
+/* VIEW ONLY page: contains no editing code. Share this link. Add #display for the TV. */
+let ok=false,upd='';
+function render(){
+  const d=location.hash==='#display';document.body.className=d?'tv':'';
+  let o=d?`<div class="bar"><h1>Team Tracker</h1><div class="clk" id="clk"></div></div>`
+   :`<div class="bar"><h1>Team Tracker</h1><nav><a href="#" class="cur">View</a><a href="#display">Screen</a></nav></div>`;
+  o+=summary();
+  if(!ok)o+='<p class="empty">Loading…</p>';
+  else{o+=gridHtml(false);if(!S.leaders.length&&!S.staff.length)o+='<p class="empty">No teams set up yet.</p>'}
+  if(d)o+='<a class="ex" href="#">Exit</a>';
+  $('#app').innerHTML=o;tick();
+}
+async function load(){
+  try{const r=await fetch(CONFIG.dataFile+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;S=await r.json();ok=true}catch(e){}
+  render();
+}
+addEventListener('hashchange',render);
+load();setInterval(load,(CONFIG.refreshSeconds||30)*1000);
+</script></body></html>

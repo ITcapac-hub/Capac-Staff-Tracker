@@ -1,7 +1,7 @@
 // ===== Settings: edit this file on GitHub to change them =====
 window.CONFIG = {
   // Your GitHub repo, as "username/repository-name"
-  repo: 'YOUR-USERNAME/YOUR-REPO',
+  repo: 'USERNAME/REPO',
   branch: 'main',
   dataFile: 'data.json',
   // How often the view/screen page checks for new data (seconds)

@@ -1,7 +1,7 @@
 // ===== Settings: edit this file on GitHub to change them =====
 window.CONFIG = {
   // Your GitHub repo, as "username/repository-name"
-  repo: 'USERNAME/REPO',
+  repo: 'itcapac-hub/REPO',
   branch: 'main',
   dataFile: 'data.json',
   // How often the view/screen page checks for new data (seconds)
